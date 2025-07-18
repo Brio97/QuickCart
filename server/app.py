@@ -1,7 +1,9 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from models import db, Product, Order, OrderItem, User
+from auth import generate_token, token_required, optional_token
 import os
+import re
 
 def create_app(config=None):
     app = Flask(__name__)
@@ -68,7 +70,8 @@ def create_app(config=None):
             return jsonify({'error': str(e)}), 500
     
     @app.route('/api/checkout', methods=['POST'])
-    def checkout():
+    @optional_token
+    def checkout(current_user):
         try:
             data = request.get_json()
             
@@ -100,7 +103,8 @@ def create_app(config=None):
             # Create order
             order = Order(
                 total_amount=total_amount,
-                status='pending'
+                status='pending',
+                user_id=current_user.id if current_user else None
             )
             
             # Add shipping info if provided
@@ -206,6 +210,154 @@ def create_app(config=None):
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
+    # Authentication Routes
+    @app.route('/api/auth/register', methods=['POST'])
+    def register():
+        try:
+            data = request.get_json()
+            
+            # Validate required fields
+            required_fields = ['email', 'password', 'first_name', 'last_name']
+            for field in required_fields:
+                if not data.get(field):
+                    return jsonify({'error': f'{field} is required'}), 400
+            
+            email = data['email'].lower().strip()
+            password = data['password']
+            first_name = data['first_name'].strip()
+            last_name = data['last_name'].strip()
+            
+            # Validate email format
+            email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_regex, email):
+                return jsonify({'error': 'Invalid email format'}), 400
+            
+            # Validate password strength
+            if len(password) < 6:
+                return jsonify({'error': 'Password must be at least 6 characters'}), 400
+            
+            # Check if user already exists
+            existing_user = User.query.filter_by(email=email).first()
+            if existing_user:
+                return jsonify({'error': 'User with this email already exists'}), 409
+            
+            # Create new user
+            user = User(
+                email=email,
+                first_name=first_name,
+                last_name=last_name
+            )
+            user.set_password(password)
+            
+            db.session.add(user)
+            db.session.commit()
+            
+            # Generate token
+            token = generate_token(user.id, user.email)
+            
+            return jsonify({
+                'success': True,
+                'token': token,
+                'user': user.to_dict()
+            }), 201
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/auth/login', methods=['POST'])
+    def login():
+        try:
+            data = request.get_json()
+            
+            if not data or not data.get('email') or not data.get('password'):
+                return jsonify({'error': 'Email and password are required'}), 400
+            
+            email = data['email'].lower().strip()
+            password = data['password']
+            
+            # Find user by email
+            user = User.query.filter_by(email=email).first()
+            
+            if not user or not user.check_password(password):
+                return jsonify({'error': 'Invalid email or password'}), 401
+            
+            # Generate token
+            token = generate_token(user.id, user.email)
+            
+            return jsonify({
+                'success': True,
+                'token': token,
+                'user': user.to_dict()
+            }), 200
+            
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/auth/me', methods=['GET'])
+    @token_required
+    def get_current_user(current_user):
+        """Get current authenticated user info"""
+        return jsonify({
+            'user': current_user.to_dict()
+        }), 200
+    
+    @app.route('/api/auth/logout', methods=['POST'])
+    @token_required
+    def logout(current_user):
+        """Logout user (client-side token removal)"""
+        return jsonify({'success': True, 'message': 'Logged out successfully'}), 200
+
+    # Protected user routes
+    @app.route('/api/user/profile', methods=['GET'])
+    @token_required
+    def get_user_profile(current_user):
+        """Get user profile with orders"""
+        orders = Order.query.filter_by(user_id=current_user.id).order_by(Order.created_at.desc()).all()
+        
+        return jsonify({
+            'user': current_user.to_dict(),
+            'orders': [order.to_dict() for order in orders]
+        }), 200
+    
+    @app.route('/api/user/profile', methods=['PUT'])
+    @token_required
+    def update_user_profile(current_user):
+        """Update user profile"""
+        try:
+            data = request.get_json()
+            
+            if 'first_name' in data:
+                current_user.first_name = data['first_name'].strip()
+            if 'last_name' in data:
+                current_user.last_name = data['last_name'].strip()
+            if 'email' in data:
+                email = data['email'].lower().strip()
+                email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                if not re.match(email_regex, email):
+                    return jsonify({'error': 'Invalid email format'}), 400
+                
+                # Check if email is already taken by another user
+                existing_user = User.query.filter(
+                    User.email == email,
+                    User.id != current_user.id
+                ).first()
+                if existing_user:
+                    return jsonify({'error': 'Email is already taken'}), 409
+                
+                current_user.email = email
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'user': current_user.to_dict()
+            }), 200
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+
     # Health check endpoint
     @app.route('/api/health', methods=['GET'])
     def health_check():

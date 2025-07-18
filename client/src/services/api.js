@@ -11,6 +11,23 @@ const apiClient = axios.create({
   },
 })
 
+// Auth token management
+export const setAuthToken = (token) => {
+  if (token) {
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    localStorage.setItem('auth_token', token)
+  } else {
+    delete apiClient.defaults.headers.common['Authorization']
+    localStorage.removeItem('auth_token')
+  }
+}
+
+// Initialize auth token from localStorage
+const savedToken = localStorage.getItem('auth_token')
+if (savedToken) {
+  setAuthToken(savedToken)
+}
+
 // Request interceptor for logging
 apiClient.interceptors.request.use(
   (config) => {
@@ -32,7 +49,15 @@ apiClient.interceptors.response.use(
     console.error('API Response Error:', error.response?.data || error.message)
     
     // Handle specific error cases
-    if (error.response?.status === 404) {
+    if (error.response?.status === 401) {
+      // Token expired or invalid - clear auth
+      setAuthToken(null)
+      // Only redirect if not already on login/register page
+      if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
+        window.location.href = '/login'
+      }
+      throw new Error('Session expired. Please login again.')
+    } else if (error.response?.status === 404) {
       throw new Error('Resource not found')
     } else if (error.response?.status === 500) {
       throw new Error('Server error. Please try again later.')
@@ -43,6 +68,80 @@ apiClient.interceptors.response.use(
     throw error
   }
 )
+
+// Authentication API
+// Authentication API
+export const login = async (email, password) => {
+  try {
+    const response = await apiClient.post('/auth/login', { email, password })
+    return response.data
+  } catch (error) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error)
+    }
+    throw new Error(`Login failed: ${error.message}`)
+  }
+}
+
+export const register = async (userData) => {
+  try {
+    const response = await apiClient.post('/auth/register', userData)
+    return response.data
+  } catch (error) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error)
+    }
+    throw new Error(`Registration failed: ${error.message}`)
+  }
+}
+
+export const getCurrentUser = async () => {
+  try {
+    const response = await apiClient.get('/auth/me')
+    return response.data
+  } catch (error) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error)
+    }
+    throw new Error(`Failed to get user info: ${error.message}`)
+  }
+}
+
+export const logout = async () => {
+  try {
+    await apiClient.post('/auth/logout')
+  } catch (error) {
+    // Even if server logout fails, clear local auth
+    console.warn('Server logout failed:', error.message)
+  } finally {
+    setAuthToken(null)
+  }
+}
+
+// User Profile API
+export const getUserProfile = async () => {
+  try {
+    const response = await apiClient.get('/user/profile')
+    return response.data
+  } catch (error) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error)
+    }
+    throw new Error(`Failed to get user profile: ${error.message}`)
+  }
+}
+
+export const updateUserProfile = async (profileData) => {
+  try {
+    const response = await apiClient.put('/user/profile', profileData)
+    return response.data
+  } catch (error) {
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error)
+    }
+    throw new Error(`Failed to update profile: ${error.message}`)
+  }
+}
 
 // Products API
 export const fetchProducts = async (params = {}) => {

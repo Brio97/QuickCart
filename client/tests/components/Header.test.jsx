@@ -5,6 +5,13 @@ import '@testing-library/jest-dom'
 import { BrowserRouter } from 'react-router-dom'
 import Header from '../../src/components/Header'
 import { CartProvider } from '../../src/context/CartContext'
+import { AuthProvider } from '../../src/context/AuthContext'
+
+// Mock API
+vi.mock('../../src/services/api', () => ({
+  getCurrentUser: vi.fn(),
+  setAuthToken: vi.fn()
+}))
 
 // Mock SearchBar component
 vi.mock('../../src/components/SearchBar', () => {
@@ -23,9 +30,11 @@ vi.mock('../../src/components/SearchBar', () => {
 const renderWithProviders = () => {
   return render(
     <BrowserRouter>
-      <CartProvider>
-        <Header />
-      </CartProvider>
+      <AuthProvider>
+        <CartProvider>
+          <Header />
+        </CartProvider>
+      </AuthProvider>
     </BrowserRouter>
   )
 }
