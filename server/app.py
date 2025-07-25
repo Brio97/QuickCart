@@ -2,23 +2,43 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from models import db, Product, Order, OrderItem, User
 from auth import generate_token, token_required, optional_token
+from database import get_database_url
 import os
 import re
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def create_app(config=None):
     app = Flask(__name__)
     
     # Configuration
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///quickcart.db')
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+    app.config['SQLALCHEMY_DATABASE_URI'] = get_database_url()
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+    }
     
     if config:
         app.config.update(config)
     
     # Initialize extensions
     db.init_app(app)
-    CORS(app)
+    
+    # CORS configuration
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+    allowed_origins = [
+        'http://localhost:3000',  # Development
+        'http://localhost:3001',  # Development alternate port
+        frontend_url,             # Production
+    ]
+    
+    CORS(app, 
+         origins=allowed_origins,
+         allow_headers=['Content-Type', 'Authorization'],
+         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
     
     # API Routes
     @app.route('/api/products', methods=['GET'])
@@ -103,8 +123,7 @@ def create_app(config=None):
             # Create order
             order = Order(
                 total_amount=total_amount,
-                status='pending',
-                user_id=current_user.id if current_user else None
+                status='pending'
             )
             
             # Add shipping info if provided

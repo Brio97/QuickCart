@@ -8,6 +8,8 @@
 - Start dev: `cd server && python run.py` (backend) and `cd client && npm run dev` (frontend)
 - Coverage: `cd server && python -m pytest --cov`
 - Install deps: `cd server && pip install -r requirements.txt` and `cd client && npm install`
+- Deploy check: `python scripts/deploy-check.py` (verify production deployment)
+- Seed production: `python scripts/seed-production.py` (populate production database)
 
 ## Architecture
 - **Frontend**: React 18 + Vite + Tailwind CSS (client/)

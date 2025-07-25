@@ -3,8 +3,9 @@ Flask-SQLAlchemy==3.0.5
 Flask-CORS==4.0.0
 Werkzeug==2.3.7
 PyJWT==2.8.0
+python-dotenv==1.0.0
+libsql-client==0.4.3
 pytest==7.4.2
 pytest-flask==1.2.0
 pytest-cov==4.1.0
 flask-testing==0.8.1
-python-dotenv==1.0.0
