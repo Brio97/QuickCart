@@ -14,11 +14,11 @@ def get_database_url():
         turso_url = os.getenv('TURSO_DATABASE_URL')
         turso_token = os.getenv('TURSO_AUTH_TOKEN')
         
-        # Convert Turso URL to libsql format
+        # Use libsql+http scheme for Turso
         if turso_url.startswith('libsql://'):
-            return f"{turso_url}?authToken={turso_token}"
+            return f"libsql+http://{turso_url[9:]}?authToken={turso_token}"
         else:
-            return f"sqlite+libsql://{turso_url}?authToken={turso_token}"
+            return f"libsql+http://{turso_url}?authToken={turso_token}"
     
     # Development: Use local SQLite
     return os.getenv('DATABASE_URL', 'sqlite:///quickcart.db')
@@ -31,10 +31,6 @@ def create_database_engine():
         # Turso/libsql configuration
         return create_engine(
             database_url,
-            poolclass=StaticPool,
-            connect_args={
-                "check_same_thread": False,
-            },
             echo=os.getenv('FLASK_ENV') == 'development'
         )
     else:
