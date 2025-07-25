@@ -14,11 +14,11 @@ def get_database_url():
         turso_url = os.getenv('TURSO_DATABASE_URL')
         turso_token = os.getenv('TURSO_AUTH_TOKEN')
         
-        # Use libsql+http scheme for Turso
+        # Use libsql scheme for sqlalchemy-libsql
         if turso_url.startswith('libsql://'):
-            return f"libsql+http://{turso_url[9:]}?authToken={turso_token}"
+            return f"libsql://{turso_url[9:]}?authToken={turso_token}"
         else:
-            return f"libsql+http://{turso_url}?authToken={turso_token}"
+            return f"libsql://{turso_url}?authToken={turso_token}"
     
     # Development: Use local SQLite
     return os.getenv('DATABASE_URL', 'sqlite:///quickcart.db')
